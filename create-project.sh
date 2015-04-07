@@ -40,9 +40,11 @@ project-remove() {
 		esac
 	done
 
+	PROJECT_NAME=$1
+
 	echo ""
 	echo "---------------------------------------"
-	echo "Removing $1 from projects folder, apache vhost file and database ..."
+	echo "Removing $PROJECT_NAME from projects folder, apache vhost file and database ..."
 	echo "---------------------------------------"
 	echo ""
 
