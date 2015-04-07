@@ -44,17 +44,17 @@ project-remove() {
 
 	echo ""
 	echo "---------------------------------------"
-	echo "Removing $PROJECT_NAME from $PROJECT_PATH ..."
+	echo "Removing $PROJECT_NAME project folder from $PROJECT_PATH ..."
 	echo "---------------------------------------"
 	echo ""
 
 	# Remove the files in the folder
 	sudo rm -rf $PROJECT_PATH/$PROJECT_NAME
-	echo "Removed project from $PROJECT_PATH/$PROJECT_NAME."
+	echo "Removed project folder $PROJECT_PATH/$PROJECT_NAME."
 
 	echo ""
 	echo "---------------------------------------"
-	echo "Removing $PROJECT_NAME from database ..."
+	echo "Removing $PROJECT_NAME project database ..."
 	echo "---------------------------------------"
 	echo ""
 
@@ -157,9 +157,9 @@ cd "$PROJECT_PATH/$PROJECT_NAME"
 
 # Prompt user for additional information
 echo ""
-echo "--------------------------------------------"
+echo "---------------------------------------"
 echo "Initializing Drupal installation process ..."
-echo "--------------------------------------------"
+echo "---------------------------------------"
 echo ""
 
 DB_PASSWORD=
@@ -178,9 +178,9 @@ chmod -R 777 "$PROJECT_PATH/$PROJECT_NAME/sites/default/files"
 
 # Create the apache configuration file
 echo ""
-echo "--------------------------------------------"
+echo "---------------------------------------"
 echo "Creating a new apache configuration file ..."
-echo "--------------------------------------------"
+echo "---------------------------------------"
 echo ""
 
 cat <<EOF > $APACHE_PATH/$PROJECT_NAME.conf
@@ -212,19 +212,19 @@ echo "Created new vhost file $PROJECT_NAME.conf at $APACHE_PATH."
 
 # Enable the new vhost and restart apache
 echo ""
-echo "---------------------------------------------------------"
+echo "---------------------------------------"
 echo "Enabling new configuration file and restarting apache ..."
-echo "---------------------------------------------------------"
+echo "---------------------------------------"
 echo ""
 
 a2ensite $PROJECT_NAME.conf
 service apache2 restart
 
 echo ""
-echo "-------------------------------------------------"
+echo "---------------------------------------"
 echo "Your new project has been successfully installed."
 echo "You can access the site from $PROJECT_URL."
-echo "-------------------------------------------------"
+echo "---------------------------------------"
 echo ""
 
 exit 0
