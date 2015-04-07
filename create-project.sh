@@ -44,7 +44,7 @@ project-remove() {
 
 	echo ""
 	echo "---------------------------------------"
-	echo "Removing $PROJECT_NAME from projects folder, apache vhost file and database ..."
+	echo "Removing $PROJECT_NAME from $PROJECT_PATH ..."
 	echo "---------------------------------------"
 	echo ""
 
@@ -52,13 +52,26 @@ project-remove() {
 	sudo rm -rf $PROJECT_PATH/$PROJECT_NAME
 	echo "Removed project from $PROJECT_PATH/$PROJECT_NAME."
 
+	echo ""
+	echo "---------------------------------------"
+	echo "Removing $PROJECT_NAME from database ..."
+	echo "---------------------------------------"
+	echo ""
+
 	# Remove the database
 	DB_PASSWORD=
 	while [ -z "$DB_PASSWORD" ]; do
 		read -s -p "Enter mysql root login password: " DB_PASSWORD
 	done
 	mysql -u root -p"$DB_PASSWORD" -e "DROP database $PROJECT_NAME"
+	echo ""
 	echo "Dropped database $PROJECT_NAME from mysql."
+
+	echo ""
+	echo "---------------------------------------"
+	echo "Removing and disabling $PROJECT_NAME.conf from $APACHE_PATH ..."
+	echo "---------------------------------------"
+	echo ""
 
 	# Disable and remove the apache vhost file
 	a2dissite "$PROJECT_NAME"
@@ -111,8 +124,10 @@ while [ $1 ]; do
 				while [ -z "$PROJECT_REMOVE" ]; do
 					read -p "Enter the name of the project to remove: " PROJECT_REMOVE
 				done
+				project-remove $PROJECT_REMOVE
+			else
+				project-remove $2
 			fi
-			project-remove $PROJECT_REMOVE
 			;;
 	esac
 	shift
