@@ -9,6 +9,7 @@ Bash script for quickly creating a new Drupal project
 ## TO-DO
 * ~~List function~~
 * ~~Remove function~~
+* Change owner:group of the files
 * Update README.md file for better installation and usage instructions
 * Initialize a git repository on creating a new project
 * Bitbucket integrations to create a new repository
