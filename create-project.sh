@@ -7,7 +7,7 @@
 # Show help information about the script
 project-usage() {
 cat <<"USAGE"
-Usage: create-project [OPTIONS]
+Usage: create-project [OPTIONS] <project-name>
 
 	-h, --help        Show this help screen
 	-c, --create      Creates a new project
@@ -16,8 +16,9 @@ Usage: create-project [OPTIONS]
 
 Examples:
 
-	project --create foo
-	project --remove foo
+	create-project --list
+	create-project --create foo
+	create-project --remove foo
 USAGE
 exit 0
 }
