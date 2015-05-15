@@ -174,9 +174,6 @@ DB_URL="mysql://$DB_USER:$DB_PASSWORD@localhost/$PROJECT_NAME"
 
 drush si -y --account-mail="$EMAIL" --account-name=agileadmin --site-name="$PROJECT_NAME" --site-mail="$EMAIL" --db-url="$DB_URL"
 
-# Set files folder permissions
-chmod -R 777 "$PROJECT_PATH/$PROJECT_NAME/sites/default/files"
-
 # Create the apache configuration file
 echo ""
 echo "---------------------------------------"
