@@ -188,6 +188,8 @@ cat <<EOF > $APACHE_PATH/$PROJECT_NAME.conf
 	ServerName $PROJECT_URL
 	DocumentRoot $PROJECT_PATH/$PROJECT_NAME
 
+	Alias /robots.txt /var/www/robots.txt
+
 	<Directory />
 		Options FollowSymLinks
 		AllowOverride None
