@@ -115,6 +115,7 @@ while [ $1 ]; do
 			;;
 		'--create'|'-c')
 			PROJECT_NAME="$2"
+			PROJECT_ENV="$3"
 			;;
 		'--list'|'-l')
 			project-list
@@ -138,9 +139,13 @@ done
 while [ -z "$PROJECT_NAME" ]; do
 	read -p "Enter your project name: " PROJECT_NAME
 done
+# Ask for the project environment if not specified in the arguments
+while [ -z "$PROJECT_ENV" ]; do
+	read -p "Enter your project environment [dev]/[prod]: " PROJECT_ENV
+done
 
 # Define project url
-PROJECT_URL="$PROJECT_NAME.dev.agiledrop.com"
+PROJECT_URL="$PROJECT_NAME.$PROJECT_ENV.agiledrop.com"
 
 # Install new Drupal project
 echo ""
@@ -181,6 +186,9 @@ echo "Creating a new apache configuration file ..."
 echo "---------------------------------------"
 echo ""
 
+
+if [ $PROJECT_ENV != "prod" ]
+then
 cat <<EOF > $APACHE_PATH/$PROJECT_NAME.conf
 <VirtualHost *:80>
 
@@ -207,6 +215,31 @@ cat <<EOF > $APACHE_PATH/$PROJECT_NAME.conf
 
 </VirtualHost>
 EOF
+else
+cat <<EOF > $APACHE_PATH/$PROJECT_NAME.conf
+<VirtualHost *:80>
+
+	ServerAdmin $EMAIL
+	ServerName $PROJECT_URL
+	DocumentRoot $PROJECT_PATH/$PROJECT_NAME
+
+	<Directory />
+		Options FollowSymLinks
+		AllowOverride None
+	</Directory>
+
+	<Directory $PROJECT_PATH/$PROJECT_NAME>
+		Options FollowSymLinks MultiViews
+		AllowOverride All
+		Require all granted
+	</Directory>
+	ErrorLog /var/log/apache2/$PROJECT_NAME-error.log
+	LogLevel error
+	CustomLog /var/log/apache2/$PROJECT_NAME-access.log combined
+
+</VirtualHost>
+EOF
+fi
 
 echo "Created new vhost file $PROJECT_NAME.conf at $APACHE_PATH."
 
