@@ -3,6 +3,7 @@
 # This script creates a new project or Drupal site
 # runs the installation script
 # and prepares the apache vhost configuration files.
+# Requires the "realpath" package
 
 # Show help information about the script
 project-usage() {
@@ -106,6 +107,8 @@ project-list () {
 EMAIL="support@agiledrop.com"
 PROJECT_PATH="/var/www"
 APACHE_PATH="/etc/apache2/sites-available"
+SCRIPT=`realpath $0`
+SCRIPTPATH=`dirname $SCRIPT`
 
 # Loop to read options and arguments.
 while [ $1 ]; do
@@ -141,7 +144,34 @@ while [ -z "$PROJECT_NAME" ]; do
 done
 # Ask for the project environment if not specified in the arguments
 while [ -z "$PROJECT_ENV" ]; do
-	read -p "Enter your project environment [dev]/[prod]: " PROJECT_ENV
+	read -p "Enter your project environment [DEV]/[prod]: " PROJECT_ENV
+	if [ -z $PROJECT_ENV ]; then	# If the user presses enter choose the default environment "dev"
+		PROJECT_ENV="dev"
+	fi
+	PROJECT_ENV=${PROJECT_ENV,,} # Make the input lower case
+	while [ "$PROJECT_ENV" != "prod" ] && [ "$PROJECT_ENV" != "dev" ]; do  # Chech if the input is correct
+		read -p "Enter your project environment [DEV]/[prod]): " PROJECT_ENV
+		if [ -z $PROJECT_ENV ]; then	# If the user presses enter choose the default environment "dev"
+			PROJECT_ENV="dev"
+		fi
+		PROJECT_ENV=${PROJECT_ENV,,} # Make the input lower case
+	done
+done
+
+# Ask for jenkins usage
+while [ -z "$JENKINS" ]; do
+	read -p "Will Jenkins be used with this project [Y]/[n]: " JENKINS
+	if [ -z $JENKINS ]; then	# If the user presses enter choose the default environment "dev"
+		JENKINS="y"
+	fi
+	JENKINS=${JENKINS,,} # Make the input lower case
+	while [ "$JENKINS" != "y" ] && [ "$JENKINS" != "n" ]; do  # Chech if the input is correct
+		read -p "Will Jenkins be used with this project [Y]/[n]: " JENKINS
+		if [ -z $JENKINS ]; then	# If the user presses enter choose the default environment "dev"
+			JENKINS="y"
+		fi
+		JENKINS=${JENKINS,,} # Make the input lower case
+	done
 done
 
 # Define project url
@@ -178,6 +208,15 @@ DB_USER="root"
 DB_URL="mysql://$DB_USER:$DB_PASSWORD@localhost/$PROJECT_NAME"
 
 drush si -y --account-mail="$EMAIL" --account-name=agileadmin --site-name="$PROJECT_NAME" --site-mail="$EMAIL" --db-url="$DB_URL"
+
+# Set the folder permissions for the project
+if [ $JENKINS = "y" ]; then
+	PERMISSIONS_USER="jenkins"
+else
+	PERMISSIONS_USER="agiledrop"
+fi
+
+sudo -u root sh $SCRIPTPATH/drupal-permissions.sh --drupal_path=$PROJECT_PATH/$PROJECT_NAME --drupal_user=$PERMISSIONS_USER
 
 # Create the apache configuration file
 echo ""
