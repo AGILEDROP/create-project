@@ -167,27 +167,67 @@ while [ "$JENKINS" != "y" ] && [ "$JENKINS" != "n" ]; do  # Chech if the input i
 	JENKINS=${JENKINS,,} # Make the input lower case
 done
 
-# Ask for existing git repo
-while [ "$GIT" != "y" ] && [ "$GIT" != "n" ]; do  # Chech if the input is correct
-	read -p "Do you already have a git repo? [y]/[N]: " GIT
-	if [ -z $GIT ]; then	# If the user presses enter choose the default option 'n'
-		GIT="n"
+# Ask for existing project
+while [ "$NEW" != "y" ] && [ "$NEW" != "n" ]; do  # Chech if the input is correct
+	read -p "Do you want to initialize a clean install? [Y]/[n]: " NEW
+	if [ -z $NEW ]; then	# If the user presses enter choose the default option 'y'
+		NEW="y"
 	fi
-	GIT=${GIT,,} # Make the input lower case
+	NEW=${NEW,,} # Make the input lower case
 done
 
 # Ask for git repo URL
-if [ $GIT = "y" ]; then
+if [ "$NEW" = "n" ]; then	# It's an existing install
 	while [ -z "$GIT_URL" ]; do
 		read -p "Git clone url: " GIT_URL
 	done
+
+else		# It's a clean install
+
+	# Ask for git initialization
+	while [ "$USE_GIT" != "y" ] && [ "$USE_GIT" != "n" ]; do  # Chech if the input is correct
+		read -p "Do you want to use git? [Y]/[n]: " USE_GIT
+		if [ -z $USE_GIT ]; then	# If the user presses enter choose the default option 'y'
+			USE_GIT="y"
+		fi
+		USE_GIT=${USE_GIT,,} # Make the input lower case
+	done
+	if [ "$USE_GIT" = "y" ]; then
+		# Ask for existing repo
+		while [ "$REPO_EXISTS" != "y" ] && [ "$REPO_EXISTS" != "n" ]; do  # Chech if the input is correct
+			read -p "Do you already have an empty repository created? [y]/[N]: " REPO_EXISTS
+			if [ -z $REPO_EXISTS ]; then	# If the user presses enter choose the default option 'y'
+				REPO_EXISTS="n"
+			fi
+			REPO_EXISTS=${REPO_EXISTS,,} # Make the input lower case
+		done
+		# Ask for repo URL
+		if [ "$REPO_EXISTS" = "y" ]; then
+			while [ -z "$GIT_URL" ]; do
+				read -p "Git clone url: " GIT_URL
+			done
+		else
+			while [ -z "$GIT_USER" ]; do
+				read -p "Bitbucket email: " GIT_USER
+			done
+			while [ -z "$GIT_PASS" ]; do
+				read -s -p "Bitbucket password: " GIT_PASS
+			done
+			read -p "Repo owner username(agiledrop if empty): " REPO_OWNER
+			if [ -z $REPO_OWNER ]; then
+				REPO_OWNER="agiledrop"
+			fi
+		fi
+	fi
 fi
+
+
 
 # Define project url
 PROJECT_URL="$PROJECT_NAME.$PROJECT_ENV.agiledrop.com"
 
 # Download the files
-if [ $GIT = "n" ]; then
+if [ $NEW = "y" ]; then
 	# Install new Drupal project
 	echo ""
 	echo "---------------------------------------"
@@ -196,8 +236,34 @@ if [ $GIT = "n" ]; then
 	echo ""
 
 	# Setup Drupal files
-	cd "$PROJECT_PATH"
-	drush dl drupal --drupal-project-rename="$PROJECT_NAME"
+	if [ $USE_GIT = "y" ]; then
+		if [ $REPO_EXISTS = "y" ]; then
+			cd "$PROJECT_PATH"
+			mkdir "$PROJECT_NAME"
+			git clone "$GIT_URL" ./"$PROJECT_NAME"/
+		else	# Repo doesn't exist yet
+			curl -X POST -v -u "$GIT_USER":"$GIT_PASS" -H "Content-Type: application/json" https://api.bitbucket.org/2.0/repositories/"$REPO_OWNER"/"$PROJECT_NAME" -d '{"scm": "git", "is_private": "true", "fork_policy": "no_public_forks" }'
+
+			cd "$PROJECT_PATH"
+			mkdir "$PROJECT_NAME"
+			git clone git@bitbucket.org:"$REPO_OWNER"/"$PROJECT_NAME".git ./"$PROJECT_NAME"/
+		fi
+		# Git exists, now download Drupal and do the first commit
+		cd "$PROJECT_PATH"
+		sudo -u root drush dl drupal --drupal-project-rename="$PROJECT_NAME" -y
+		sudo -u root cp "$PROJECT_PATH/$PROJECT_NAME"/example.gitignore "$PROJECT_PATH/$PROJECT_NAME"/.gitignore
+		cd "$PROJECT_PATH/$PROJECT_NAME"
+		pwd
+		ls
+		git add *
+		git commit -m "Initial commit"
+		git push --set-upstream origin master
+
+	else	# Don't use git
+		cd "$PROJECT_PATH"
+		sudo -u root drush dl drupal --drupal-project-rename="$PROJECT_NAME" -y
+	fi
+	
 else
 	# Clone the repository
 	mkdir "$PROJECT_PATH/$PROJECT_NAME"
@@ -232,16 +298,6 @@ if [ $JENKINS = "y" ]; then
 	PERMISSIONS_USER="jenkins"
 else
 	PERMISSIONS_USER="agiledrop"
-fi
-
-if [ $REALPATH_INSTALLED = 1 ]; then
-	sudo -u root sh $SCRIPTPATH/drupal-permissions.sh --drupal_path=$PROJECT_PATH/$PROJECT_NAME --drupal_user=$PERMISSIONS_USER
-else
-	echo ""
-	echo "---------------------------------------"
-	echo "Realpath is not installed, please run drupal-permissions.sh manually."
-	echo "---------------------------------------"
-	echo ""
 fi
 
 # Create the apache configuration file
@@ -324,5 +380,15 @@ echo "Your new project has been successfully installed."
 echo "You can access the site from $PROJECT_URL."
 echo "---------------------------------------"
 echo ""
+
+if [ $REALPATH_INSTALLED = 1 ]; then
+	sudo -u root sh $SCRIPTPATH/drupal-permissions.sh --drupal_path=$PROJECT_PATH/$PROJECT_NAME --drupal_user=$PERMISSIONS_USER
+else
+	echo ""
+	echo "---------------------------------------"
+	echo "Realpath is not installed, please run drupal-permissions.sh manually."
+	echo "---------------------------------------"
+	echo ""
+fi
 
 exit 0
