@@ -3,7 +3,7 @@
 # This script creates a new project or Drupal site
 # runs the installation script
 # and prepares the apache vhost configuration files.
-# Requires the "realpath" package
+# Requires the "realpath" package for the permissions script to run
 
 # Show help information about the script
 project-usage() {
@@ -107,8 +107,13 @@ project-list () {
 EMAIL="support@agiledrop.com"
 PROJECT_PATH="/var/www"
 APACHE_PATH="/etc/apache2/sites-available"
-SCRIPT=`realpath $0`
-SCRIPTPATH=`dirname $SCRIPT`
+
+type -P realpath &>/dev/null && REALPATH_INSTALLED=1 || REALPATH_INSTALLED=0	# Checks if the realpath package is installed
+
+if [ $REALPATH_INSTALLED = 1 ]; then	# Find the location of the script folder if realpath is installed
+	SCRIPT=`realpath $0`
+	SCRIPTPATH=`dirname $SCRIPT`
+fi
 
 # Loop to read options and arguments.
 while [ $1 ]; do
@@ -142,51 +147,64 @@ done
 while [ -z "$PROJECT_NAME" ]; do
 	read -p "Enter your project name: " PROJECT_NAME
 done
+
 # Ask for the project environment if not specified in the arguments
-while [ -z "$PROJECT_ENV" ]; do
-	read -p "Enter your project environment [DEV]/[prod]: " PROJECT_ENV
+while [ "$PROJECT_ENV" != "prod" ] && [ "$PROJECT_ENV" != "dev" ]; do  # Chech if the input is correct
+	read -p "Enter your project environment [DEV]/[prod]): " PROJECT_ENV
 	if [ -z $PROJECT_ENV ]; then	# If the user presses enter choose the default environment "dev"
 		PROJECT_ENV="dev"
 	fi
 	PROJECT_ENV=${PROJECT_ENV,,} # Make the input lower case
-	while [ "$PROJECT_ENV" != "prod" ] && [ "$PROJECT_ENV" != "dev" ]; do  # Chech if the input is correct
-		read -p "Enter your project environment [DEV]/[prod]): " PROJECT_ENV
-		if [ -z $PROJECT_ENV ]; then	# If the user presses enter choose the default environment "dev"
-			PROJECT_ENV="dev"
-		fi
-		PROJECT_ENV=${PROJECT_ENV,,} # Make the input lower case
-	done
 done
 
+
 # Ask for jenkins usage
-while [ -z "$JENKINS" ]; do
-	read -p "Will Jenkins be used with this project [Y]/[n]: " JENKINS
-	if [ -z $JENKINS ]; then	# If the user presses enter choose the default environment "dev"
+while [ "$JENKINS" != "y" ] && [ "$JENKINS" != "n" ]; do  # Chech if the input is correct
+	read -p "Will Jenkins be used with this project? [Y]/[n]: " JENKINS
+	if [ -z $JENKINS ]; then	# If the user presses enter choose the default option 'y'
 		JENKINS="y"
 	fi
 	JENKINS=${JENKINS,,} # Make the input lower case
-	while [ "$JENKINS" != "y" ] && [ "$JENKINS" != "n" ]; do  # Chech if the input is correct
-		read -p "Will Jenkins be used with this project [Y]/[n]: " JENKINS
-		if [ -z $JENKINS ]; then	# If the user presses enter choose the default environment "dev"
-			JENKINS="y"
-		fi
-		JENKINS=${JENKINS,,} # Make the input lower case
-	done
 done
+
+# Ask for existing git repo
+while [ "$GIT" != "y" ] && [ "$GIT" != "n" ]; do  # Chech if the input is correct
+	read -p "Do you already have a git repo? [y]/[N]: " GIT
+	if [ -z $GIT ]; then	# If the user presses enter choose the default option 'n'
+		GIT="n"
+	fi
+	GIT=${GIT,,} # Make the input lower case
+done
+
+# Ask for git repo URL
+if [ $GIT = "y" ]; then
+	while [ -z "$GIT_URL" ]; do
+		read -p "Git clone url: " GIT_URL
+	done
+fi
 
 # Define project url
 PROJECT_URL="$PROJECT_NAME.$PROJECT_ENV.agiledrop.com"
 
-# Install new Drupal project
-echo ""
-echo "---------------------------------------"
-echo "Downloading Drupal at $PROJECT_PATH ..."
-echo "---------------------------------------"
-echo ""
+# Download the files
+if [ $GIT = "n" ]; then
+	# Install new Drupal project
+	echo ""
+	echo "---------------------------------------"
+	echo "Downloading Drupal at $PROJECT_PATH ..."
+	echo "---------------------------------------"
+	echo ""
 
-# Setup Drupal files
-cd "$PROJECT_PATH"
-drush dl drupal --drupal-project-rename="$PROJECT_NAME"
+	# Setup Drupal files
+	cd "$PROJECT_PATH"
+	drush dl drupal --drupal-project-rename="$PROJECT_NAME"
+else
+	# Clone the repository
+	mkdir "$PROJECT_PATH/$PROJECT_NAME"
+	cd "$PROJECT_PATH/$PROJECT_NAME"
+	git clone "$GIT_URL" ./
+fi
+
 
 # Install Drupal
 cd "$PROJECT_PATH/$PROJECT_NAME"
@@ -216,7 +234,15 @@ else
 	PERMISSIONS_USER="agiledrop"
 fi
 
-sudo -u root sh $SCRIPTPATH/drupal-permissions.sh --drupal_path=$PROJECT_PATH/$PROJECT_NAME --drupal_user=$PERMISSIONS_USER
+if [ $REALPATH_INSTALLED = 1 ]; then
+	sudo -u root sh $SCRIPTPATH/drupal-permissions.sh --drupal_path=$PROJECT_PATH/$PROJECT_NAME --drupal_user=$PERMISSIONS_USER
+else
+	echo ""
+	echo "---------------------------------------"
+	echo "Realpath is not installed, please run drupal-permissions.sh manually."
+	echo "---------------------------------------"
+	echo ""
+fi
 
 # Create the apache configuration file
 echo ""
@@ -228,7 +254,7 @@ echo ""
 
 if [ $PROJECT_ENV != "prod" ]
 then
-cat <<EOF > $APACHE_PATH/$PROJECT_NAME.conf
+sudo -u root cat <<EOF > $APACHE_PATH/$PROJECT_NAME.conf
 <VirtualHost *:80>
 
 	ServerAdmin $EMAIL
@@ -255,7 +281,7 @@ cat <<EOF > $APACHE_PATH/$PROJECT_NAME.conf
 </VirtualHost>
 EOF
 else
-cat <<EOF > $APACHE_PATH/$PROJECT_NAME.conf
+sudo -u root cat <<EOF > $APACHE_PATH/$PROJECT_NAME.conf
 <VirtualHost *:80>
 
 	ServerAdmin $EMAIL
@@ -289,8 +315,8 @@ echo "Enabling new configuration file and restarting apache ..."
 echo "---------------------------------------"
 echo ""
 
-a2ensite $PROJECT_NAME.conf
-service apache2 restart
+sudo -u root a2ensite $PROJECT_NAME.conf
+sudo -u root service apache2 restart
 
 echo ""
 echo "---------------------------------------"
