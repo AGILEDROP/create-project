@@ -105,7 +105,7 @@ project-list () {
 
 # Define some basic variables
 EMAIL="support@agiledrop.com"
-PROJECT_PATH="/var/www/html"
+PROJECT_PATH="/var/www"
 APACHE_PATH="/etc/apache2/sites-available"
 
 type -P realpath &>/dev/null && REALPATH_INSTALLED=1 || REALPATH_INSTALLED=0	# Checks if the realpath package is installed
