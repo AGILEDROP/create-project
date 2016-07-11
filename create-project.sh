@@ -105,15 +105,17 @@ project-list () {
 
 # Define some basic variables
 EMAIL="support@agiledrop.com"
-PROJECT_PATH="/var/www"
+PROJECT_PATH="/var/www/html"
 APACHE_PATH="/etc/apache2/sites-available"
 
 type -P realpath &>/dev/null && REALPATH_INSTALLED=1 || REALPATH_INSTALLED=0	# Checks if the realpath package is installed
+type -P composer &>/dev/null && COMPOSER_INSTALLED=1 || COMPOSER_INSTALLED=0	# Checks if the composer package is installed
 
 if [ $REALPATH_INSTALLED = 1 ]; then	# Find the location of the script folder if realpath is installed
 	SCRIPT=`realpath $0`
 	SCRIPTPATH=`dirname $SCRIPT`
 fi
+
 
 # Loop to read options and arguments.
 while [ $1 ]; do
@@ -142,6 +144,19 @@ while [ $1 ]; do
 	esac
 	shift
 done
+
+echo ""
+echo "---------------------------------------"
+echo "Before proceeding please note:"
+echo " - Make sure you are not running this script as root"
+echo " - Make /var/www writable for the user that is running this script"
+echo " - Install the realpath package if you want to the file permissions to be set automatically"
+echo " - Install the composer package"
+echo " - It is possible that you will be asked for your password for running commands as root"
+echo " - Consider changing the PERMISSIONS_USER variable is you are not logged in as agiledrop"
+echo "---------------------------------------"
+echo ""
+
 
 # Ask for the project name if not specified in the arguments
 while [ -z "$PROJECT_NAME" ]; do
@@ -178,6 +193,10 @@ done
 
 # Ask for git repo URL
 if [ "$NEW" = "n" ]; then	# It's an existing install
+	if [ $COMPOSER_INSTALLED = 0 ]; then		# Composer is required to download packages that are not commited to git
+		echo "ERROR: You have to install Composer to proceed!"
+		exit 0
+	fi
 	while [ -z "$GIT_URL" ]; do
 		read -p "Git clone url: " GIT_URL
 	done
@@ -213,7 +232,8 @@ else		# It's a clean install
 			while [ -z "$GIT_PASS" ]; do
 				read -s -p "Bitbucket password: " GIT_PASS
 			done
-			read -p "Repo owner username(agiledrop if empty): " REPO_OWNER
+			echo ""
+			read -p "Repo owner username(agiledrop if empty) [https://bitbucket.org/[username]/repository]: " REPO_OWNER
 			if [ -z $REPO_OWNER ]; then
 				REPO_OWNER="agiledrop"
 			fi
@@ -243,32 +263,29 @@ if [ $NEW = "y" ]; then
 			git clone "$GIT_URL" ./"$PROJECT_NAME"/
 		else	# Repo doesn't exist yet
 			curl -X POST -v -u "$GIT_USER":"$GIT_PASS" -H "Content-Type: application/json" https://api.bitbucket.org/2.0/repositories/"$REPO_OWNER"/"$PROJECT_NAME" -d '{"scm": "git", "is_private": "true", "fork_policy": "no_public_forks" }'
-
 			cd "$PROJECT_PATH"
-			mkdir "$PROJECT_NAME"
-			git clone git@bitbucket.org:"$REPO_OWNER"/"$PROJECT_NAME".git ./"$PROJECT_NAME"/
+			git clone git@bitbucket.org:"$REPO_OWNER"/"$PROJECT_NAME".git
 		fi
-		# Git exists, now download Drupal and do the first commit
+		# Git directory is created, now download Drupal
 		cd "$PROJECT_PATH"
-		sudo -u root drush dl drupal --drupal-project-rename="$PROJECT_NAME" -y
-		sudo -u root cp "$PROJECT_PATH/$PROJECT_NAME"/example.gitignore "$PROJECT_PATH/$PROJECT_NAME"/.gitignore
-		cd "$PROJECT_PATH/$PROJECT_NAME"
-		pwd
-		ls
-		git add *
-		git commit -m "Initial commit"
-		git push --set-upstream origin master
+		sudo -u root rm -r /tmp/create-project
+		sudo -u root mkdir /tmp/create-project
+		sudo -u root cp -rp "./$PROJECT_NAME/.git" /tmp/create-project/  # Drush dl deletes .git so it needs to be saved temporarily
+		sudo -u root chmod -R 777 ~/.drush/cache/download/ # Need to make the drush cache folder writable
+		drush dl drupal --drupal-project-rename="$PROJECT_NAME" -y
+		sudo -u root cp -rp /tmp/create-project/.git "./$PROJECT_NAME/"  # Copy .git back to the project folder
+		sudo -u root cp "$PROJECT_PATH/$PROJECT_NAME"/example.gitignore "$PROJECT_PATH/$PROJECT_NAME"/.gitignore  # Create .gitignore
 
 	else	# Don't use git
 		cd "$PROJECT_PATH"
 		sudo -u root drush dl drupal --drupal-project-rename="$PROJECT_NAME" -y
 	fi
-	
-else
+
+else  # Existing install
 	# Clone the repository
-	mkdir "$PROJECT_PATH/$PROJECT_NAME"
-	cd "$PROJECT_PATH/$PROJECT_NAME"
-	git clone "$GIT_URL" ./
+	cd "$PROJECT_PATH"
+	mkdir "$PROJECT_NAME"
+	git clone "$GIT_URL" ./"$PROJECT_NAME"/
 fi
 
 
@@ -291,7 +308,20 @@ done
 DB_USER="root"
 DB_URL="mysql://$DB_USER:$DB_PASSWORD@localhost/$PROJECT_NAME"
 
+
+cd "$PROJECT_PATH/$PROJECT_NAME"
+
+if [ $NEW = "n" ]; then # First download composer packages
+	composer install
+fi
+
 drush si -y --account-mail="$EMAIL" --account-name=agileadmin --site-name="$PROJECT_NAME" --site-mail="$EMAIL" --db-url="$DB_URL"
+
+if [ $NEW = "y" ] && [ $USE_GIT = "y" ]; then
+	git add *
+	git commit -m "Initial commit"
+	git push --set-upstream origin master
+fi
 
 # Set the folder permissions for the project
 if [ $JENKINS = "y" ]; then
@@ -308,61 +338,49 @@ echo "---------------------------------------"
 echo ""
 
 
-if [ $PROJECT_ENV != "prod" ]
-then
-sudo -u root cat <<EOF > $APACHE_PATH/$PROJECT_NAME.conf
-<VirtualHost *:80>
-
-	ServerAdmin $EMAIL
-	ServerName $PROJECT_URL
-	DocumentRoot $PROJECT_PATH/$PROJECT_NAME
-
-	Alias /robots.txt /var/www/robots.txt
-
-	<Directory />
-		Options FollowSymLinks
-		AllowOverride None
-	</Directory>
-
-	<Directory $PROJECT_PATH/$PROJECT_NAME>
-		Options FollowSymLinks MultiViews
-		AllowOverride All
-		Require all granted
-	</Directory>
-
-	ErrorLog /var/log/apache2/$PROJECT_NAME-error.log
-	LogLevel error
-	CustomLog /var/log/apache2/$PROJECT_NAME-access.log combined
-
-</VirtualHost>
-EOF
+cd /tmp
+if [ ! -f "$PROJECT_NAME.conf" ]; then
+	touch "$PROJECT_NAME.conf"
 else
-sudo -u root cat <<EOF > $APACHE_PATH/$PROJECT_NAME.conf
-<VirtualHost *:80>
-
-	ServerAdmin $EMAIL
-	ServerName $PROJECT_URL
-	DocumentRoot $PROJECT_PATH/$PROJECT_NAME
-
-	<Directory />
-		Options FollowSymLinks
-		AllowOverride None
-	</Directory>
-
-	<Directory $PROJECT_PATH/$PROJECT_NAME>
-		Options FollowSymLinks MultiViews
-		AllowOverride All
-		Require all granted
-	</Directory>
-	ErrorLog /var/log/apache2/$PROJECT_NAME-error.log
-	LogLevel error
-	CustomLog /var/log/apache2/$PROJECT_NAME-access.log combined
-
-</VirtualHost>
-EOF
+	sudo -u root rm "$PROJECT_NAME.conf"
 fi
 
+echo "<VirtualHost *:80>" >> "$PROJECT_NAME.conf"
+echo "" >> "$PROJECT_NAME.conf"
+echo "  ServerAdmin $EMAIL" >> "$PROJECT_NAME.conf"
+echo "  ServerName $PROJECT_URL" >> "$PROJECT_NAME.conf"
+echo "  DocumentRoot $PROJECT_PATH/$PROJECT_NAME" >> "$PROJECT_NAME.conf"
+echo "" >> "$PROJECT_NAME.conf"
+if [ $PROJECT_ENV != "prod" ]; then		# Use robots that block search engines for development
+	echo "  Alias /robots.txt $PROJECT_PATH/robots.txt" >> "$PROJECT_NAME.conf"
+	echo "" >> "$PROJECT_NAME.conf"
+fi
+echo "  <Directory />" >> "$PROJECT_NAME.conf"
+echo "    Options FollowSymLinks"  >> "$PROJECT_NAME.conf"
+echo "    AllowOverride None" >> "$PROJECT_NAME.conf"
+echo "  </Directory>"  >> "$PROJECT_NAME.conf"
+echo "" >> "$PROJECT_NAME.conf"
+echo "  <Directory $PROJECT_PATH/$PROJECT_NAME>" >> "$PROJECT_NAME.conf"
+echo "    Options FollowSymLinks MultiViews" >> "$PROJECT_NAME.conf"
+echo "    AllowOverride All" >> "$PROJECT_NAME.conf"
+echo "    Require all granted" >> "$PROJECT_NAME.conf"
+echo "  </Directory>" >> "$PROJECT_NAME.conf"
+echo "" >> "$PROJECT_NAME.conf"
+echo "  ErrorLog /var/log/apache2/$PROJECT_NAME-error.log" >> "$PROJECT_NAME.conf"
+echo "  LogLevel error" >> "$PROJECT_NAME.conf"
+echo "  CustomLog /var/log/apache2/$PROJECT_NAME-access.log combined" >> "$PROJECT_NAME.conf"
+echo "" >> "$PROJECT_NAME.conf"
+echo "</VirtualHost>" >> "$PROJECT_NAME.conf"
+
+sudo -u root cp "/tmp/$PROJECT_NAME.conf" "$APACHE_PATH"
+
 echo "Created new vhost file $PROJECT_NAME.conf at $APACHE_PATH."
+
+if [ ! -f "$PROJECT_PATH/robots.txt" ]; then	# Create robots.txt if it doesnt't exist
+	touch "$PROJECT_PATH/robots.txt"
+	echo "User-agent: *" >> "$PROJECT_PATH/robots.txt"
+	echo "Disallow: /" >> "$PROJECT_PATH/robots.txt"
+fi
 
 # Enable the new vhost and restart apache
 echo ""
@@ -382,7 +400,7 @@ echo "---------------------------------------"
 echo ""
 
 if [ $REALPATH_INSTALLED = 1 ]; then
-	sudo -u root sh $SCRIPTPATH/drupal-permissions.sh --drupal_path=$PROJECT_PATH/$PROJECT_NAME --drupal_user=$PERMISSIONS_USER
+	sudo -u root sh "$SCRIPTPATH/drupal-permissions.sh" "--drupal_path=$PROJECT_PATH/$PROJECT_NAME" "--drupal_user=$PERMISSIONS_USER" --httpd_group=www-data
 else
 	echo ""
 	echo "---------------------------------------"
