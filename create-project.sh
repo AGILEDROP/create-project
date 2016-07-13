@@ -1,19 +1,20 @@
 #!/bin/bash
 
-# This script creates a new project or Drupal site
-# runs the installation script
-# and prepares the apache vhost configuration files.
-# Requires the "realpath" package for the permissions script to run
+# Creates or clones a Drupal project, database and Apache vhost file
+# Creates a Bitbucket repository and pushes an initial commit
+# Sets correct file and folder permissions
+# List all projects inside a folder
+# Removes the project files, database and Apache vhost file
 
 # Show help information about the script
 project-usage() {
 cat <<"USAGE"
 Usage: create-project [OPTIONS] <project-name>
 
-	-h, --help        Show this help screen
-	-c, --create      Creates a new project
-	-l, --list        List the current virtual host
-	-r, --remove      Remove an existing project
+	-h, --help    Show this help screen
+	-c, --create   Creates a new project
+	-l, --list    List the current virtual host
+	-r, --remove   Remove an existing project
 
 Examples:
 
@@ -116,7 +117,6 @@ if [ $REALPATH_INSTALLED = 1 ]; then	# Find the location of the script folder if
 	SCRIPTPATH=`dirname $SCRIPT`
 fi
 
-
 # Loop to read options and arguments.
 while [ $1 ]; do
 	case "$1" in
@@ -153,10 +153,9 @@ echo " - Make /var/www writable for the user that is running this script"
 echo " - Install the realpath package if you want to the file permissions to be set automatically"
 echo " - Install the composer package"
 echo " - It is possible that you will be asked for your password for running commands as root"
-echo " - Consider changing the PERMISSIONS_USER variable is you are not logged in as agiledrop"
+echo " - Consider changing the PERMISSIONS_USER variable if you are not logged in as agiledrop"
 echo "---------------------------------------"
 echo ""
-
 
 # Ask for the project name if not specified in the arguments
 while [ -z "$PROJECT_NAME" ]; do
@@ -164,7 +163,7 @@ while [ -z "$PROJECT_NAME" ]; do
 done
 
 # Ask for the project environment if not specified in the arguments
-while [ "$PROJECT_ENV" != "prod" ] && [ "$PROJECT_ENV" != "dev" ]; do  # Chech if the input is correct
+while [ "$PROJECT_ENV" != "prod" ] && [ "$PROJECT_ENV" != "dev" ]; do # Chech if the input is correct
 	read -p "Enter your project environment [DEV]/[prod]): " PROJECT_ENV
 	if [ -z $PROJECT_ENV ]; then	# If the user presses enter choose the default environment "dev"
 		PROJECT_ENV="dev"
@@ -172,20 +171,19 @@ while [ "$PROJECT_ENV" != "prod" ] && [ "$PROJECT_ENV" != "dev" ]; do  # Chech i
 	PROJECT_ENV=${PROJECT_ENV,,} # Make the input lower case
 done
 
-
 # Ask for jenkins usage
-while [ "$JENKINS" != "y" ] && [ "$JENKINS" != "n" ]; do  # Chech if the input is correct
+while [ "$JENKINS" != "y" ] && [ "$JENKINS" != "n" ]; do # Chech if the input is correct
 	read -p "Will Jenkins be used with this project? [Y]/[n]: " JENKINS
-	if [ -z $JENKINS ]; then	# If the user presses enter choose the default option 'y'
+	if [ -z $JENKINS ]; then # If the user presses enter choose the default option 'y'
 		JENKINS="y"
 	fi
 	JENKINS=${JENKINS,,} # Make the input lower case
 done
 
 # Ask for existing project
-while [ "$NEW" != "y" ] && [ "$NEW" != "n" ]; do  # Chech if the input is correct
+while [ "$NEW" != "y" ] && [ "$NEW" != "n" ]; do # Chech if the input is correct
 	read -p "Do you want to initialize a clean install? [Y]/[n]: " NEW
-	if [ -z $NEW ]; then	# If the user presses enter choose the default option 'y'
+	if [ -z $NEW ]; then # If the user presses enter choose the default option 'y'
 		NEW="y"
 	fi
 	NEW=${NEW,,} # Make the input lower case
@@ -193,7 +191,7 @@ done
 
 # Ask for git repo URL
 if [ "$NEW" = "n" ]; then	# It's an existing install
-	if [ $COMPOSER_INSTALLED = 0 ]; then		# Composer is required to download packages that are not commited to git
+	if [ $COMPOSER_INSTALLED = 0 ]; then # Composer is required to download packages that are not commited to git
 		echo "ERROR: You have to install Composer to proceed!"
 		exit 0
 	fi
@@ -204,7 +202,7 @@ if [ "$NEW" = "n" ]; then	# It's an existing install
 else		# It's a clean install
 
 	# Ask for git initialization
-	while [ "$USE_GIT" != "y" ] && [ "$USE_GIT" != "n" ]; do  # Chech if the input is correct
+	while [ "$USE_GIT" != "y" ] && [ "$USE_GIT" != "n" ]; do # Chech if the input is correct
 		read -p "Do you want to use git? [Y]/[n]: " USE_GIT
 		if [ -z $USE_GIT ]; then	# If the user presses enter choose the default option 'y'
 			USE_GIT="y"
@@ -213,7 +211,7 @@ else		# It's a clean install
 	done
 	if [ "$USE_GIT" = "y" ]; then
 		# Ask for existing repo
-		while [ "$REPO_EXISTS" != "y" ] && [ "$REPO_EXISTS" != "n" ]; do  # Chech if the input is correct
+		while [ "$REPO_EXISTS" != "y" ] && [ "$REPO_EXISTS" != "n" ]; do # Chech if the input is correct
 			read -p "Do you already have an empty repository created? [y]/[N]: " REPO_EXISTS
 			if [ -z $REPO_EXISTS ]; then	# If the user presses enter choose the default option 'y'
 				REPO_EXISTS="n"
@@ -240,8 +238,6 @@ else		# It's a clean install
 		fi
 	fi
 fi
-
-
 
 # Define project url
 PROJECT_URL="$PROJECT_NAME.$PROJECT_ENV.agiledrop.com"
@@ -270,24 +266,23 @@ if [ $NEW = "y" ]; then
 		cd "$PROJECT_PATH"
 		sudo -u root rm -r /tmp/create-project
 		sudo -u root mkdir /tmp/create-project
-		sudo -u root cp -rp "./$PROJECT_NAME/.git" /tmp/create-project/  # Drush dl deletes .git so it needs to be saved temporarily
+		sudo -u root cp -rp "./$PROJECT_NAME/.git" /tmp/create-project/ # Drush dl deletes .git so it needs to be saved temporarily
 		sudo -u root chmod -R 777 ~/.drush/cache/download/ # Need to make the drush cache folder writable
 		drush dl drupal --drupal-project-rename="$PROJECT_NAME" -y
-		sudo -u root cp -rp /tmp/create-project/.git "./$PROJECT_NAME/"  # Copy .git back to the project folder
-		sudo -u root cp "$PROJECT_PATH/$PROJECT_NAME"/example.gitignore "$PROJECT_PATH/$PROJECT_NAME"/.gitignore  # Create .gitignore
+		sudo -u root cp -rp /tmp/create-project/.git "./$PROJECT_NAME/" # Copy .git back to the project folder
+		sudo -u root cp "$PROJECT_PATH/$PROJECT_NAME"/example.gitignore "$PROJECT_PATH/$PROJECT_NAME"/.gitignore # Create .gitignore
 
 	else	# Don't use git
 		cd "$PROJECT_PATH"
 		sudo -u root drush dl drupal --drupal-project-rename="$PROJECT_NAME" -y
 	fi
 
-else  # Existing install
+else # Existing install
 	# Clone the repository
 	cd "$PROJECT_PATH"
 	mkdir "$PROJECT_NAME"
 	git clone "$GIT_URL" ./"$PROJECT_NAME"/
 fi
-
 
 # Install Drupal
 cd "$PROJECT_PATH/$PROJECT_NAME"
@@ -307,7 +302,6 @@ done
 # Do the core install
 DB_USER="root"
 DB_URL="mysql://$DB_USER:$DB_PASSWORD@localhost/$PROJECT_NAME"
-
 
 cd "$PROJECT_PATH/$PROJECT_NAME"
 
@@ -347,28 +341,28 @@ fi
 
 echo "<VirtualHost *:80>" >> "$PROJECT_NAME.conf"
 echo "" >> "$PROJECT_NAME.conf"
-echo "  ServerAdmin $EMAIL" >> "$PROJECT_NAME.conf"
-echo "  ServerName $PROJECT_URL" >> "$PROJECT_NAME.conf"
-echo "  DocumentRoot $PROJECT_PATH/$PROJECT_NAME" >> "$PROJECT_NAME.conf"
+echo " ServerAdmin $EMAIL" >> "$PROJECT_NAME.conf"
+echo " ServerName $PROJECT_URL" >> "$PROJECT_NAME.conf"
+echo " DocumentRoot $PROJECT_PATH/$PROJECT_NAME" >> "$PROJECT_NAME.conf"
 echo "" >> "$PROJECT_NAME.conf"
 if [ $PROJECT_ENV != "prod" ]; then		# Use robots that block search engines for development
-	echo "  Alias /robots.txt $PROJECT_PATH/robots.txt" >> "$PROJECT_NAME.conf"
+	echo " Alias /robots.txt $PROJECT_PATH/robots.txt" >> "$PROJECT_NAME.conf"
 	echo "" >> "$PROJECT_NAME.conf"
 fi
-echo "  <Directory />" >> "$PROJECT_NAME.conf"
-echo "    Options FollowSymLinks"  >> "$PROJECT_NAME.conf"
-echo "    AllowOverride None" >> "$PROJECT_NAME.conf"
-echo "  </Directory>"  >> "$PROJECT_NAME.conf"
+echo " <Directory />" >> "$PROJECT_NAME.conf"
+echo "  Options FollowSymLinks" >> "$PROJECT_NAME.conf"
+echo "  AllowOverride None" >> "$PROJECT_NAME.conf"
+echo " </Directory>" >> "$PROJECT_NAME.conf"
 echo "" >> "$PROJECT_NAME.conf"
-echo "  <Directory $PROJECT_PATH/$PROJECT_NAME>" >> "$PROJECT_NAME.conf"
-echo "    Options FollowSymLinks MultiViews" >> "$PROJECT_NAME.conf"
-echo "    AllowOverride All" >> "$PROJECT_NAME.conf"
-echo "    Require all granted" >> "$PROJECT_NAME.conf"
-echo "  </Directory>" >> "$PROJECT_NAME.conf"
+echo " <Directory $PROJECT_PATH/$PROJECT_NAME>" >> "$PROJECT_NAME.conf"
+echo "  Options FollowSymLinks MultiViews" >> "$PROJECT_NAME.conf"
+echo "  AllowOverride All" >> "$PROJECT_NAME.conf"
+echo "  Require all granted" >> "$PROJECT_NAME.conf"
+echo " </Directory>" >> "$PROJECT_NAME.conf"
 echo "" >> "$PROJECT_NAME.conf"
-echo "  ErrorLog /var/log/apache2/$PROJECT_NAME-error.log" >> "$PROJECT_NAME.conf"
-echo "  LogLevel error" >> "$PROJECT_NAME.conf"
-echo "  CustomLog /var/log/apache2/$PROJECT_NAME-access.log combined" >> "$PROJECT_NAME.conf"
+echo " ErrorLog /var/log/apache2/$PROJECT_NAME-error.log" >> "$PROJECT_NAME.conf"
+echo " LogLevel error" >> "$PROJECT_NAME.conf"
+echo " CustomLog /var/log/apache2/$PROJECT_NAME-access.log combined" >> "$PROJECT_NAME.conf"
 echo "" >> "$PROJECT_NAME.conf"
 echo "</VirtualHost>" >> "$PROJECT_NAME.conf"
 
