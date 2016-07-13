@@ -268,13 +268,13 @@ if [ $NEW = "y" ]; then
 		sudo -u root mkdir /tmp/create-project
 		sudo -u root cp -rp "./$PROJECT_NAME/.git" /tmp/create-project/ # Drush dl deletes .git so it needs to be saved temporarily
 		sudo -u root chmod -R 777 ~/.drush/cache/download/ # Need to make the drush cache folder writable
-		drush dl drupal --drupal-project-rename="$PROJECT_NAME" -y
+		drush dl drupal --drupal-project-rename="$PROJECT_NAME" --default-major=7 -y
 		sudo -u root cp -rp /tmp/create-project/.git "./$PROJECT_NAME/" # Copy .git back to the project folder
 		sudo -u root cp "$PROJECT_PATH/$PROJECT_NAME"/example.gitignore "$PROJECT_PATH/$PROJECT_NAME"/.gitignore # Create .gitignore
 
 	else	# Don't use git
 		cd "$PROJECT_PATH"
-		sudo -u root drush dl drupal --drupal-project-rename="$PROJECT_NAME" -y
+		sudo -u root drush dl drupal --drupal-project-rename="$PROJECT_NAME" --default-major=7 -y
 	fi
 
 else # Existing install
