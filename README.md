@@ -68,5 +68,6 @@ drupal-permissions --drupal_path=[path] --drupal_user=[user] --httpd_group=[grou
 * ~~Change owner:group of the files~~
 * ~~Initialize a git repository on creating a new project~~
 * ~~Bitbucket integrations to create a new repository~~
+* Option to choose which Drupal major version to install
 * Update README.md file for better installation and usage instructions
 * Jenkins integration to create a build task
